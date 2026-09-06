@@ -26,13 +26,13 @@ public class PlaylistService {
     private final UserRepository userRepository;
     private final Random random = new Random();
 
-    // private static final List<String> DEFAULT_COVERS = List.of(
-    //         "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=900&q=80",
-    //         "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=900&q=80",
-    //         "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=900&q=80",
-    //         "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=900&q=80",
-    //         "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?auto=format&fit=crop&w=900&q=80"
-    // );
+    private static final List<String> DEFAULT_COVERS = List.of(
+            "https://images.unsplash.com/photo-1614613535308-eb5fbd3d2c17?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1514525253161-7a46d19cd819?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=900&q=80",
+            "https://images.unsplash.com/photo-1498038432885-c6f3f1b912ee?auto=format&fit=crop&w=900&q=80"
+    );
 
     /**
      * Resolves user identifier to email (supports MongoDB ObjectId string or user email).
@@ -91,8 +91,17 @@ public class PlaylistService {
      * Retrieves a single playlist by ID.
      */
     public Playlist getPlaylistById(String id) {
-        return playlistRepository.findById(id)
-                .orElseThrow(() -> new AppException.UserNotFoundException("Playlist not found with id: " + id));
+        Optional<Playlist> found = playlistRepository.findById(id);
+        if (found.isPresent()) {
+            return found.get();
+        }
+        if ("playlist-favorites".equalsIgnoreCase(id) || (id != null && id.startsWith("fav-"))) {
+            return playlistRepository.findAll().stream()
+                    .filter(p -> "Favorites".equalsIgnoreCase(p.getName()))
+                    .findFirst()
+                    .orElseThrow(() -> new AppException.UserNotFoundException("Playlist not found with id: " + id));
+        }
+        throw new AppException.UserNotFoundException("Playlist not found with id: " + id);
     }
 
     /**

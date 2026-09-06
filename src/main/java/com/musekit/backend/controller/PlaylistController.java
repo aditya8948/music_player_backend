@@ -13,32 +13,47 @@ import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.util.StringUtils;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import java.util.Map;
 
+/**
+ * Playlist management controller.
+ *
+ * All playlist operations are scoped to the authenticated user.
+ * The user's identity is extracted from:
+ * 1. ZITADEL JWT token (direct or via Gateway)
+ * 2. X-User-Email header injected by the API Gateway
+ * 3. Client-supplied userId parameter as fallback
+ */
 @RestController
 @RequestMapping("/api/playlists")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Playlists", description = "Endpoints for creating and managing custom playlists and adding/removing tracks")
+@Slf4j
 public class PlaylistController {
 
     private final PlaylistService playlistService;
 
     @Operation(
             summary = "Get All Playlists",
-            description = "Retrieves all custom playlists. Optionally filter by user ID."
+            description = "Retrieves all playlists for the authenticated user."
     )
     @GetMapping
     public ResponseEntity<List<Playlist>> getAllPlaylists(
-            @Parameter(description = "Optional user ID to filter playlists", example = "usr-123")
-            @RequestParam(value = "userId", required = false) String userId
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(value = "X-User-Email", required = false) String headerEmail,
+            @RequestParam(value = "userId", required = false) String paramUserId
     ) {
-        List<Playlist> playlists = playlistService.getAllPlaylists(userId);
+        String userEmail = resolveUserEmail(jwt, headerEmail, paramUserId);
+        List<Playlist> playlists = playlistService.getAllPlaylists(userEmail);
         return ResponseEntity.ok(playlists);
     }
 
@@ -58,14 +73,21 @@ public class PlaylistController {
 
     @Operation(
             summary = "Create Playlist",
-            description = "Creates a new playlist with name, optional cover image, and initial song list."
+            description = "Creates a new playlist for the authenticated user. The userId is automatically set from the JWT token or Gateway header."
     )
     @ApiResponses(value = {
             @ApiResponse(responseCode = "201", description = "Playlist created successfully"),
             @ApiResponse(responseCode = "400", description = "Invalid request payload")
     })
     @PostMapping
-    public ResponseEntity<Playlist> createPlaylist(@Valid @RequestBody CreatePlaylistRequest request) {
+    public ResponseEntity<Playlist> createPlaylist(
+            @Valid @RequestBody CreatePlaylistRequest request,
+            @AuthenticationPrincipal Jwt jwt,
+            @RequestHeader(value = "X-User-Email", required = false) String headerEmail
+    ) {
+        String userEmail = resolveUserEmail(jwt, headerEmail, request.getUserId());
+        request.setUserId(userEmail);
+
         Playlist created = playlistService.createPlaylist(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(created);
     }
@@ -116,5 +138,51 @@ public class PlaylistController {
     public ResponseEntity<Map<String, Object>> deletePlaylist(@PathVariable String id) {
         playlistService.deletePlaylist(id);
         return ResponseEntity.ok(Map.of("success", true, "message", "Playlist deleted successfully"));
+    }
+
+    /**
+     * Resolves the user's email across JWT claims, Gateway headers, and fallback params.
+     */
+    private String resolveUserEmail(Jwt jwt, String headerEmail, String fallbackUserId) {
+        String email = null;
+        if (jwt != null) {
+            email = extractEmail(jwt);
+            String sub = jwt.getSubject();
+            if (email != null && sub != null && email.equals(sub)) {
+                // If it fell back to subject ID, clear it so header or param is prioritized
+                email = null;
+            }
+        }
+
+        if ((email == null || !email.contains("@")) && StringUtils.hasText(headerEmail) && headerEmail.contains("@")) {
+            email = headerEmail.toLowerCase().trim();
+        }
+
+        if ((email == null || !email.contains("@")) && StringUtils.hasText(fallbackUserId) && fallbackUserId.contains("@")) {
+            email = fallbackUserId.toLowerCase().trim();
+        }
+
+        if (email == null && jwt != null) {
+            email = jwt.getSubject();
+        }
+
+        log.debug("Resolved playlist user email: {} (header: {}, fallback: {})", email, headerEmail, fallbackUserId);
+        return email;
+    }
+
+    /**
+     * Extracts the user's email from ZITADEL JWT claims.
+     * Falls back to preferred_username or subject if email claim is missing.
+     */
+    private String extractEmail(Jwt jwt) {
+        if (jwt == null) return null;
+
+        String email = jwt.getClaimAsString("email");
+        if (email != null) return email.toLowerCase().trim();
+
+        String preferred = jwt.getClaimAsString("preferred_username");
+        if (preferred != null && preferred.contains("@")) return preferred.toLowerCase().trim();
+
+        return jwt.getSubject();
     }
 }

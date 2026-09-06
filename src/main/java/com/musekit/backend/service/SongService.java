@@ -172,7 +172,7 @@ public class SongService {
                 return resource;
             }
         }
-        throw new AppException.InvalidOtpException("Audio file is not locally stored for download");
+        throw new AppException.UserNotFoundException("Audio file is not locally stored for download");
     }
 
     /**

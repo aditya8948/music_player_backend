@@ -25,7 +25,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/api/songs")
 @RequiredArgsConstructor
-@CrossOrigin(origins = "*")
 @Tag(name = "Songs", description = "Endpoints for song browsing, searching, streaming, uploading, and downloading")
 public class SongController {
 
