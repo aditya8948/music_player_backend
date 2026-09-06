@@ -31,6 +31,9 @@ class SongServiceTest {
     @Mock
     private MongoTemplate mongoTemplate;
 
+    @Mock
+    private SongSearchService songSearchService;
+
     @InjectMocks
     private SongService songService;
 
@@ -52,11 +55,11 @@ class SongServiceTest {
     }
 
     @Test
-    void testGetPaginatedSongs() {
+    void testGetPaginatedSongs_BrowseWithoutQuery() {
         when(mongoTemplate.count(any(Query.class), eq(Song.class))).thenReturn(8L);
         when(mongoTemplate.find(any(Query.class), eq(Song.class))).thenReturn(List.of(sampleSong));
 
-        PaginatedSongsResponse response = songService.getPaginatedSongs(1, 8, "Midnight", "Bollywood", null, null);
+        PaginatedSongsResponse response = songService.getPaginatedSongs(1, 8, null, "Bollywood", null, null);
 
         assertNotNull(response);
         assertEquals(1, response.getCurrentPage());
@@ -67,6 +70,29 @@ class SongServiceTest {
         assertFalse(response.isHasPrevious());
         assertEquals(1, response.getSongs().size());
         assertEquals("Midnight Horizon", response.getSongs().get(0).getTitle());
+    }
+
+    @Test
+    void testGetPaginatedSongs_SearchWithElasticsearch() {
+        PaginatedSongsResponse esResponse = PaginatedSongsResponse.builder()
+                .songs(List.of(sampleSong))
+                .currentPage(1)
+                .totalPages(1)
+                .totalSongs(1)
+                .limit(8)
+                .hasNext(false)
+                .hasPrevious(false)
+                .build();
+
+        when(songSearchService.searchSongs(1, 8, "Midnight", "Bollywood", null, null))
+                .thenReturn(esResponse);
+
+        PaginatedSongsResponse response = songService.getPaginatedSongs(1, 8, "Midnight", "Bollywood", null, null);
+
+        assertNotNull(response);
+        assertEquals(1, response.getSongs().size());
+        assertEquals("Midnight Horizon", response.getSongs().get(0).getTitle());
+        verify(songSearchService).searchSongs(1, 8, "Midnight", "Bollywood", null, null);
     }
 
     @Test

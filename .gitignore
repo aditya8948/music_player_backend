@@ -39,3 +39,6 @@ build/
 uploads/songs/
 uploads/covers/*
 !uploads/covers/default_cover.jpg
+
+### Scratch & Temp ###
+scratch/

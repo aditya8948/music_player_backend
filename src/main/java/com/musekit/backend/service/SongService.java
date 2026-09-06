@@ -33,6 +33,7 @@ public class SongService {
 
     private final SongRepository songRepository;
     private final MongoTemplate mongoTemplate;
+    private final SongSearchService songSearchService;
 
     private static final String SONGS_SUBDIR = "uploads/songs";
     private static final String COVERS_SUBDIR = "uploads/covers";
@@ -40,7 +41,8 @@ public class SongService {
 
     /**
      * Unified Song Query:
-     * - Returns Local MongoDB songs with pagination, search, and genre/artist/album filters.
+     * - Uses Elasticsearch for high-speed fuzzy multi-field search when a query is provided.
+     * - Falls back seamlessly to MongoDB if Elasticsearch is unavailable or for standard browsing.
      */
     public PaginatedSongsResponse getPaginatedSongs(
             int page,
@@ -50,6 +52,14 @@ public class SongService {
             String artist,
             String album
     ) {
+        if (StringUtils.hasText(query)) {
+            try {
+                return songSearchService.searchSongs(page, limit, query, genre, artist, album);
+            } catch (Exception e) {
+                log.warn("Elasticsearch query failed, falling back to MongoDB search: {}", e.getMessage());
+            }
+        }
+
         int validPage = Math.max(1, page);
         int validLimit = Math.max(1, limit);
 
@@ -154,6 +164,7 @@ public class SongService {
                 .build();
 
         Song savedSong = songRepository.save(newSong);
+        songSearchService.indexSong(savedSong);
         log.info("Song uploaded successfully: {} by {}", savedSong.getTitle(), savedSong.getArtist());
         return savedSong;
     }
