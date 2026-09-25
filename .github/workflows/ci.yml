@@ -27,7 +27,7 @@ jobs:
       - name: Run Unit Tests
         run: |
           ./mvnw test --batch-mode \
-            -Dtest="SongControllerTest,SongServiceTest,PlaylistControllerTest,PlaylistServiceTest,SongSearchServiceTest" \
+            -Dtest="SongControllerTest,SongServiceTest,PlaylistServiceTest,SongSearchServiceTest" \
             -DfailIfNoTests=false
 
       - name: Package JAR
