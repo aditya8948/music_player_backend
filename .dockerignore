@@ -1,0 +1,16 @@
+target/
+.git/
+.gitignore
+.idea/
+*.iml
+*.iws
+*.ipr
+.vscode/
+.DS_Store
+*.md
+*.log
+.mvn/wrapper/maven-wrapper.jar
+uploads/
+scratch/
+scripts/
+docker-compose.yml
